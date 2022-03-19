@@ -1,0 +1,63 @@
+---
+title: "Emails"
+author: "Reed"
+date: "3/14/2021"
+output: pdf_document
+---
+ 
+```{r, loadlib, results='hide', message=F, warning=F}
+library(tidyverse)
+```
+
+## Emails
+Many students emailed questions in addition to attending office hours.
+
+This is not the greatest CSV format ever (it was rendered by outlook), and scrubbing the info would take more time than I think is required for this purpose. But, here is a way of tracking how many emails I wrote. 
+```{r, Emails wrangling}
+log <- read.csv("TA_EMAILS_LOG.csv")[,c(1:4,6:7)] %>% #neccessary columns
+  janitor::clean_names()
+
+log <- log %>% 
+  mutate(body = str_replace_all(body, "[\r\n\t]" , " ")) %>% # gross
+  filter(from_address == 'reedbenkendorf2021@u.northwestern.edu') %>% #only emails I wrote
+  filter(to_address != "yingying.xie@northwestern.edu") %>% # i didn't write you any long emails
+  mutate(meeting_link = str_detect(body, "Reed Benkendorf is inviting you to a scheduled Zoom meeting.")) %>% # these were all short emails were people needed links
+  filter(meeting_link == FALSE) %>% #remove them now
+  dplyr::select(-meeting_link) %>% #don't need the column anymore
+  mutate(body = str_remove_all(body, '<.*>')) %>% #remove tags and contents within them to...
+  mutate(num_char = nchar(body)) %>% #arrange the length of the messages to..
+  filter(num_char > 262) # delete little short follow up messages
+
+emails_sent <- nrow(log)
+```
+
+I estimate the mean time spent troubleshooting a problem and writing an email was 10 minutes. 
+```{r, Emails final, comment=""}
+total_email_time <- c('Time spent responding to emails:' =  (emails_sent * 10)/60) # minutes to hour
+writeLines(paste(names(total_email_time), total_email_time, "hours", sep = " ", collapse = ","))
+
+hours_remain <- hours_remain - total_email_time
+
+rm(log, emails_sent, total_email_time)
+```
+ 
+ 
+ ## Time spend writing the script for attendance and downloading the CSV's
+ 
+ The attendance script took some time, this one only took about an hour. 
+```{r, comment=""}
+scripts <- c('Total time spent working on scripts:' = 5)
+writeLines(paste(names(scripts), scripts, "hours", sep = " ", collapse = ","))
+
+hours_remain <- hours_remain - scripts
+rm(scripts)
+```
+
+## Total time worked
+
+```{r, comment=""}
+hours_worked <- round(total_hours - hours_remain, 2)
+
+writeLines(paste("I worked", hours_worked, "hours"))
+```
+

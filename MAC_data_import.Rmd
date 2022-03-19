@@ -1,0 +1,157 @@
+---
+title: "Importing CSV's into R, and general file management, on MacOS"
+author: "Reed"
+date: "1/14/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+Mac, by design, hides a lot of the workings of a computer from a user by default. 
+
+Our operating system info is as follows:
+```{r, echo = F, comment = ""}
+si <- sessionInfo()
+writeLines(si[["R.version"]]$version.string)
+writeLines(si[["platform"]])
+writeLines(si[["running"]])
+rm(si)
+```
+
+
+# 1 Create a dedicated folder for R for Data Science
+
+A) First, please create a new R script in your Rstudio. And then run the following commands: 
+
+```{r, eval = F}
+current <- getwd()
+print(current)
+```
+
+[1] "/Users/yourname"
+
+The output should hopefully look like the above; except 'yourname' should be well... YOUR name. If it is not, for example if it looks like this:
+
+[1] "/Users/yourname/Downloads"
+
+Then please create a variable like this:
+```{r}
+current <- "/Users/yourname"
+```
+
+B) Now please choose a name for the folder you want to keep your course materials in. In this example I use 'R_DataScience'
+```{r}
+new_folder <- "/R_DataScience"
+```
+
+Now we can 'paste' together the variables 'current' and 'new folder' using the command below. This will basically just combine the contents of each variable. 
+```{r}
+folder_2_create <- paste0(current, new_folder)
+```
+
+```{r, comment = ""} 
+writeLines(folder_2_create) 
+```
+
+C) Now let's create a folder to hold our course materials!!
+```{r, eval = F}
+make.dir(folder_2_create)
+```
+
+You will notice R does not create any output from this command. This is because the output occurred in our computer!
+
+D) We can verify this folder exists via:
+
+```{r, eval = F}
+setwd(folder_2_create)
+getwd()
+```
+
+If the output of getwd() matches your setwd location then you are good! 
+
+E) If you are within the appropriate directory ('R_DataScience'), than Create a 'data' folder to store all of our data for this class
+```{r, eval = F}
+dir.create('data')
+```
+
+F) We can verify that this folder exists via:
+```{r, eval = F}
+list.dirs()
+```
+
+This command should basically put out a file 'data'
+
+G) If we want we can change the working directory to that data folder a few ways...
+```{r, warning = F, message = F, eval = F}
+setwd('data') # if we are in R_DataScience
+# OR
+setwd('./data') # if we are in R_Datascience
+# OR 
+setwd(paste0(new_folder, "/", 'data')) # From this current session, 
+# not necessarily in R_DataScience
+
+# OR
+setwd("/Users/yourname/R_DataScience") # from ANYWHERE on your computer
+# OR if we are in a fresh session...
+```
+
+Generally when we save an R script in our 'R_DataScience' folder that will change the directory, but you may need to use that last line of code quite often this quarter!
+
+
+# 2)  Add a feature to the 'Finder' app now.
+
+A) Add the 'Path' feature to your Finder window. (it may already be there...)
+1) please open a 'Finder' window
+2) Navigate to the top bar of your computer window and select 'View'
+3) in the 'View' drop down navigate to 'Customize Toolbar...'
+4) select a feature called 'Path' and drag it onto your finder window.
+
+```{r, out.width = "30%", fig.show='hold', echo = F}
+knitr::include_graphics("/Users/amelialitz/R_DataScience/images/Add_path_to_Finder.png")
+knitr::include_graphics("/Users/amelialitz/R_DataScience/images/Navigate_to_Customize_toolbar.png")
+knitr::include_graphics("/Users/amelialitz/R_DataScience/images/Navigate_to_Users.png")
+```
+
+Now please return to your finder window
+
+B) See how to navigate to the folder.
+1) Click on your new 'Path' button
+2) From the drop down select something like 'Macintosh HD'
+3) Within the Finder window select YOURNAME
+4) Now you should be able to scroll down to your new folder!!!
+  
+After you download course files, please move them here. Please put your data folders into the 'data' folder. 
+
+C) Move a file from your 'Downloads' to your 'Data' folder
+1) Open a 'Finder' window, if one is not already open. 
+2) Use the bar at the top of your window to navigate to 'File' > 'New Finder Window'
+3) You should now have two finder windows, in one navigate to 'Downloads'
+4) In the second finder window, also navigate to 'Downloads' 
+5) In one finder window, using the path tab now navigate to either the 'YOURNAME' folder, or to the 'User' folder and then the 'YOURNAME' folder
+6) in the main body of the Viewer Window you should be able to navigate to the 'R_DataScience' folder, and then the 'data' folder, drag your file over. 
+
+# A few examples of importing data from your computer to your R session.
+
+We will load the readr package. 
+
+```{r Load Libraries, warning= F, message = F}
+library(readr)
+```
+
+Import local data using the Full path. 
+
+```{r Full Path Import, message=F, eval = F}
+mydata <- read_csv("/Users/yourname/R_DataScience/Data/phn_modified.txt", comment = "#")
+```
+
+Import data from within a directory
+
+```{r Import from within the Current Working Directory, message = F, eval = F}
+setwd("/Users/yourname/R_DataScience")
+mydata2 <- read_csv("data/phn_modified.txt", comment = "#")
+```
+
+Note that this second method is preferred. 
+
+
+
