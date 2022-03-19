@@ -1,0 +1,114 @@
+---
+title: "CS_03_answers"
+author: "Reed"
+date: "1/24/2022"
+output: pdf_document
+---
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(here)
+p <- 'C:/R_datsci_2022/data'
+f <- list.files(p, 'csv')
+fp <- paste0(p, '/', f)
+
+census_size <- read.csv(fp[2])
+traits <- read.csv(fp[3])
+
+rm(f, p, fp)
+```
+
+```{r}
+rare_plants <- left_join(census_size, traits, by = c('species' = 'species_name'))
+
+rm(census_size, traits)
+```
+
+Q1. For each species, how many populations are featured in this dataset?
+
+```{r}
+
+rare_plants %>% 
+  group_by(species) %>% 
+  distinct(species, pop_id) %>% 
+  tally() # use tally
+
+rare_plants %>% 
+  group_by(species) %>% 
+  distinct(species, pop_id) %>%  
+  count() # or use count. 
+
+rare_plants %>% 
+  group_by(species) %>% 
+  distinct(species, pop_id) %>% 
+  nrow() # you cannot use nrow, it is from base r and does
+## not recognize groupings
+
+```
+
+Q2. Which population has the most years of data available (biggest sample size)?
+
+```{r}
+rare_plants %>% 
+  ungroup() %>% 
+  #drop_na(pop_size) %>% 
+  #group_by(species, pop_id) %>% 
+  #tally() %>% 
+  count(species, pop_id) %>% 
+  arrange(-n) %>% 
+  slice(2, with_ties = T) # weird needs slice for both
+```
+
+Q3. Do annual or perennial species have higher population counts on average? What about variance? Hint: use the appropriate join function to join the tables. Then us group_by(), and finally the mean() and var() functions in summarize().
+
+```{r}
+
+rare_plants %>% 
+  group_by(duration) %>% 
+  summarize(Average_Count = mean(pop_size, na.rm = T),
+            Average_Variance = var(pop_size, na.rm = T))
+
+```
+
+```{r}
+rare_plants$date <- mdy(rare_plants$date)
+
+lvls <- rare_plants %>% group_by(species) %>% 
+  distinct(pop_id) %>% 
+  arrange(species) %>% 
+  mutate(pop_id = as_factor(pop_id)) %>% 
+  pull(pop_id)
+
+rare_plants <- rare_plants %>% mutate(Population_id = as_factor())
+
+rare_plants %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(pop_id_char = as.character(pop_id)) %>% 
+  #mutate(pop_id_fact = as_factor(pop_id_char)) %>% 
+  #mutate(pop_id_fact = fct_reorder(pop_id_fact, lvls)) %>% 
+  mutate(species = str_to_sentence(species)) %>% 
+  ggplot(aes(date, log(pop_size), color = pop_id_char)) + 
+  theme_bw() +
+  guides(color = guide_legend("Population ID"))  +
+  labs(x = 'Year', y = 'Number of Individuals (log)', title = 'Trends in Poplation Sizes Overtime') +
+  theme(plot.title = element_text(hjust = 0.5))+
+  geom_line() + 
+  geom_point() + 
+  facet_wrap(~ species) 
+
+rare_plants %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(pop_id_char = as.character(pop_id)) %>% 
+  mutate(species = str_to_sentence(species)) %>% 
+  
+  ggplot(aes(date, pop_size, color = pop_id_char)) + 
+  theme_bw() +
+  guides(color = guide_legend("Population ID"))  +
+  labs(x = 'Year', y = 'Number of Individuals', title = 'Trends in Poplation Sizes Overtime') +
+  theme(plot.title = element_text(hjust = 0.5))+
+  geom_line() + 
+  geom_point() + 
+  facet_wrap(~ species) 
+```

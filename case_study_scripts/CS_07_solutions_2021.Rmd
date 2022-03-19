@@ -1,0 +1,198 @@
+---
+title: "CS_07_Solutions"
+author: "Reed"
+date: "3/6/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+```
+
+For this analysis we will be working with the suite of packages contained in the Tidyverse Hadley et al., a utilitarian set of packages based on functional 'verbs', and the principle of 'tidy' data. We will use the 'SF' or 'Simple features' package by Edzar Pabloisma et al. to work with spatial data in a 'tidy' fashion
+```{r library, results = 'hide', message = F, warning = F, echo = FALSE}
+library(tidyverse)
+library(sf)
+library(lubridate) # not a core tidyverse package, i.e. does not load with lib(tidy)
+library(spData)
+```
+
+
+Import data for our analysis
+```{r}
+directory <- getwd() # Copy our current working directory
+file <- list.files(directory, pattern = ".shp", recursive = T) # get the name of all of our shapefiles
+head(file) # let's see where the file we want is...
+storms <- read_sf(file[1], quiet = T, stringsAsFactors = F) # ok it is the first file in our list. 
+
+#testy <- read_sf("08b_data/08b_data/IBTrACS.NA.list.v04r00.points.shp")
+#testy2 <- rgdal::readOGR(dsn = "08b_data/08b_data", layer = "IBTrACS.NA.list.v04r00.points")
+
+print(file)
+
+rm(directory, file)
+head(storms)
+```
+
+Filter for storms which occurred after 1950.
+```{r}
+# storms <- storms %>%  # way to just use season, but remember not all seasons work by year, many can span them
+#    filter(SEASON >= 1950)
+
+storms <- storms %>% 
+ mutate(ISO_TIME = ymd_hms(ISO_TIME)) %>% 
+ #mutate(ISO_TIME = lubridate::as_datetime(ISO_TIME)) %>% # or we can use this method to just date without time
+  filter(ISO_TIME > as_date('1950-01-01 00:00:00')) # method one with lubridate. 
+
+# rm(IBtracs.sf)
+
+head(storms)
+```
+
+
+```{r}
+storms <- storms %>% 
+  mutate_if(is.numeric, function(x) ifelse(x==-9999.0,NA,x))
+```
+
+this function means :
+mutate_if = will apply the function to EACH column which meets the next condition
+is.numeric = will apply the mutation to each column which is numeric
+function = we want to apply a function we are writing ourselves
+(x) = a placeholder for the dataframe or object we want to apply the function to. 
+ifelse = if the condition it met do this, if not do this.
+x==-9999.0, this is our condition we are evaluating
+NA = if the value is -9999.0 than make it NA, 
+x = otherwise return the value (?)
+
+
+Adding a column for the decade value
+```{r}
+
+#decade_rounder <- function(x){
+#  x - x %% 10}
+## val <- c(1923, 1944, 1956)
+# out # this is written as a vector, we would need to change a few things!
+# test <- as.data.frame(year = c(1951, 1972, 1983, 1994), 
+#           site = c('juniper', 'bristlecone', 'juniper', 'bristlecone'))
+#out <- decade_rounder(val)
+
+storms <- storms %>% 
+  mutate(DECADE = floor(year /10) *10)# %>%  # using the year column works to
+  #mutate(DECADE = year - (year %% 10)) # Modulo method.
+#IBtracs_recent.sf <- IBtracs_recent.sf %>% 
+#  mutate(DECADE = floor_date(ISO_TIME, years(10))) %>%  # floor date does not use decade, but we can define it.
+#  mutate(DECADE = as.character(DECADE)) %>% 
+#  mutate(DECADE = str_remove(DECADE, "-01-01")) %>% 
+#  mutate(DECADE = as.integer(DECADE))
+
+#out1 <- storms %>% 
+#  mutate(DECADE = floor_date(ISO_TIME, years(10)))
+
+  
+```
+
+Collecting the boundary box for mapping storms
+```{r}
+region <- st_bbox(storms)
+
+region
+```
+
+Plot these storms
+```{r}
+data(world)
+
+ggplot() +
+  #geom_sf(data=world,inherit.aes = F,size=.1,fill="grey",colour="black") +
+  geom_sf(data=world) +
+  coord_sf(ylim=region[c(2,4)],xlim=region[c(1,3)]) +
+  
+  stat_bin2d(data = storms, aes(y = st_coordinates(storms)[,2], x = st_coordinates(storms)[,1]), bins=100) +
+  scale_fill_distiller(palette="YlOrRd", trans="log", direction=-1, breaks= c(1,10,100,1000)) +
+  facet_wrap(~DECADE, nrow = 2) +
+  
+  labs(title="Major Storms Since 1950 by Decade", 
+       x="Longitude",
+       y="Latitude",
+       caption= "This map made using data from NOAA") +
+  theme(plot.title = element_text(hjust = 0.5), 
+        axis.text.x = element_text(angle = 90, hjust = 1),
+        plot.caption = element_text(hjust=1))
+
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+data(us_states) # open us_states dataset from spData
+storms_crs <- st_crs(storms)
+
+#str(storms_crs)
+#nad83 <- st_crs(4269)
+#str(nad83)
+#
+#states_nad83 <- st_transform(states, nad83)
+#st_crs(states_nad83)
+
+states <- us_states %>% 
+  st_transform(storms_crs) %>%  # convert to WGS 84
+  rename(StateName = NAME) # rename the NAME column
+
+# states <- us_states %>%  OR transform without intermediate variable. 
+#  st_transform(st_crs(storms)) %>% 
+#  rename(StateName = Name) # .... etc. 
+
+us_storms <- st_join(storms, states, join = st_intersects,left = F) 
+  
+us_storms <- us_storms %>% 
+  group_by(StateName) %>%  # group these data by STATE
+  mutate(Unique_storms = n_distinct(SID)) %>%  # count the number of distinct storms in the state
+  group_by(StateName) %>% 
+  arrange(desc(Unique_storms), .bygroup = TRUE) 
+  # summarize(total_storms = length(unique(SID)))
+
+us_storms_2 <- us_storms %>% # length unique method... same values...
+  group_by(StateName) %>%  # group these data by STATE
+  summarize(total_storms = length(unique(SID))) %>% 
+  slice_max(n = 5, order_by = total_storms)
+    
+# test_florida <- us_storms %>% 
+#   filter(StateName == "Florida") %>%  # verify we have the right number of # storms
+#   st_drop_geometry() %>% 
+#   select(SID, NAME, year, month, day, ISO_TIME)
+# 
+# test_name <- us_storms %>%  # let's make sure distinct worked.. 
+#   filter(StateName == "Florida") %>%  # verify we have the right number of # storms
+#   st_drop_geometry() %>% 
+#   distinct(NAME, .keep_all = T) %>% 
+#   select(SID, NAME, year)
+# 
+# test_SID <- us_storms %>%  # let's make sure distinct worked.. 
+#   filter(StateName == "Florida") %>%  # verify we have the right number of # storms
+#   st_drop_geometry() %>% 
+#   distinct(SID, .keep_all = T) %>% 
+#   select(SID, NAME, year, ISO_TIME)
+# 
+# rm(test_florida, test_name, test_SID)
+
+table <- us_storms %>% 
+  select(StateName, REGION, Unique_storms) %>%  # reduce the columns for the table
+  st_drop_geometry() %>% # we do not need geometry anymore
+  distinct() %>% #only have one record per state
+  ungroup() %>%  # removing grouping
+  #arrange(desc(Unique_storms)) %>% 
+  #slice(1:5)
+  slice_max(n = 5, order_by = Unique_storms) %>%  # find the 5 stormiest states
+  rename(State = StateName) %>% 
+  rename(Region = REGION) %>% 
+  rename('Number of Storms' = Unique_storms)
+
+knitr::kable(table)
+```
+
+• sort by the number of storms in each state
+• keep only the top 5 states
+• Use kable() to produce a nice table of 5 state names and the number of storms
+
+
+

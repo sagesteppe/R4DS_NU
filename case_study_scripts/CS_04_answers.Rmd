@@ -1,0 +1,322 @@
+---
+title: "CS_04_ANSWERS"
+author: "Reed"
+date: "2/4/2022"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+
+Download data a couple ways
+```{r}
+dataurl="https://data.giss.nasa.gov/tmp/gistemp/STATIONS/tmp_USW00094846_14_0_1/station.csv"
+
+# download.file("https://data.giss.nasa.gov/tmp/gistemp/STATIONS# /tmp_USW00094846_14_0_1/station.csv", 
+#               destfile = paste0('Station_', Sys.Date(), '.csv'), 
+#               method = "curl")
+
+temp=read_csv(dataurl,
+              skip=1, #skip the first line which has column names
+              na="999.90", 
+              col_names = c("YEAR","JAN","FEB","MAR", # define column names
+                            "APR","MAY","JUN","JUL",
+                            "AUG","SEP","OCT","NOV",
+                            "DEC","DJF","MAM"
+                            )
+              )
+# LOAD DATA FROM A LOCAL SOURCE. 
+
+setwd("C:/R_datsci_2022/assignments")
+directories <- list.dirs("C:/R_datsci_2022/")
+directories <- directories[which(stringr::str_detect(directories, "data"))]
+directories[1]
+files <- list.files(directories[1], ".csv")
+
+ohare <- files[which(stringr::str_detect(files, "ohare"))]
+ohare_temp <- read.csv(paste0(directories[1], "/", ohare))
+
+boise <- files[which(stringr::str_detect(files, "boise"))]
+seattle <- files[which(stringr::str_detect(files, "seattle"))]
+
+boise_temp <- read.csv(paste0(directories[1], "/", boise))
+seattle_temp <- read.csv(paste0(directories[1], "/", seattle))
+
+ohare_temp <- cbind(STATION = 'Chicago', ohare_temp)
+seattle_temp <- cbind(STATION = 'Seattle', seattle_temp)
+boise_temp <- cbind(STATION = 'Boise', boise_temp)
+
+rm(directories, files, boise, seattle, ohare)
+```
+
+Graph the mean temperature in June, July and August (JJA) using R base graphics
+```{r}
+# Graph the mean temperature in June, July and August (JJA) using R base graphics
+ohare_temp_jja <- ohare_temp[ohare_temp$J.J.A != 999.90,c('YEAR', 'J.J.A')]
+plot(x = ohare_temp_jja$YEAR, y = ohare_temp_jja$J.J.A)
+```
+
+Add a loess smooth line
+```{r}
+plot(x = ohare_temp_jja$YEAR, y = ohare_temp_jja$J.J.A) +
+lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),
+      x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x)
+```
+
+Add a graph title and a sub title indicating the data source
+```{r}
+plot(x = ohare_temp_jja$YEAR, y = ohare_temp_jja$J.J.A, 
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard, O'Hare Intl. Airport") +
+  lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x)
+```
+
+Add informative axis labels including unit (degree C)
+```{r}
+plot(x = ohare_temp_jja$YEAR, y = ohare_temp_jja$J.J.A, 
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard, O'Hare Intl. Airport", 
+     xlab = 'Year', 
+     ylab = 'Mean Temperature June - August (C°)') +
+  lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x)
+```
+Save the graph to a png file using png() and dev.off()
+```{r}
+png("Summer_mean_temperature_OHARE.png", width = 480, height= 480)
+plot(x = ohare_temp_jja$YEAR, y = ohare_temp_jja$J.J.A, 
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard, O'Hare Intl. Airport", 
+     xlab = 'Year', 
+     ylab = 'Mean Temperature June - August (C°)') +
+  lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x)
+dev.off()
+```
+
+Make two additional plots of summer mean temperature JJA for the two stations you just explore
+
+```{r}
+ohare_temp$STATION <- 'Chicago'
+
+boise_temp <- filter(boise_temp, J.J.A != 999.90)
+plot(J.J.A ~ YEAR, data = boise_temp)
+
+seattle_temp <- filter(seattle_temp, J.J.A != 999.90)
+plot(J.J.A ~ YEAR, data = seattle_temp)
+```
+
+Combine data from three stations into one data frame and plot the summer mean temperature JJA of three stations in one plot. This is one quite complex way, but with some 'which switches' could be pretty good for automated graphing!
+```{r}
+test <- cbind(boise_temp[((nrow(boise_temp)-nrow(seattle_temp))+1):nrow(boise_temp), 
+                         c('STATION', 'J.J.A')], 
+              ohare_temp[((nrow(ohare_temp)-nrow(seattle_temp))+1):nrow(ohare_temp), 
+                         c('STATION', 'J.J.A')],
+              seattle_temp[, c('STATION', 'J.J.A')]
+) # S.G. WAY ON DATA - QUITE COMPLEX !!!!
+
+test <- cbind(TARGET_A[((nrow(TARGET_A)-nrow(SHORTEST_TARGET))+1):nrow(TARGET_A), 
+                       c('STATION', 'J.J.A')], 
+              TARGET_B[((nrow(TARGET_B)-nrow(SHORTEST_TARGET))+1):nrow(TARGET_B), 
+                       c('STATION', 'J.J.A')],
+              SHORTEST_TARGET[, c('STATION', 'J.J.A')]
+) # S.G. WAY PSEUDOCODE - QUITE COMPLEX !!!!
+```
+
+
+```{r}
+temperatures <- rbind(boise_temp, ohare_temp, seattle_temp) %>% 
+  add_count(YEAR) %>% 
+  filter(n == 3) %>% 
+  filter(J.J.A != 999.90) %>% 
+  mutate(STATION = as_factor(STATION))
+
+boise_temp <- filter(temperatures, STATION == "Boise")
+ohare_temp <- filter(temperatures, STATION == "Chicago")
+seattle_temp <- filter(temperatures, STATION == "Seattle")
+
+city_colours <- c('goldenrod3','mediumpurple4', 'darkseagreen4')
+col = city_colours[temperatures$STATION]
+
+plot(J.J.A ~ YEAR, data = temperatures)
+
+plot(J.J.A ~ YEAR, data = temperatures,
+     col = city_colours[temperatures$STATION], 
+     pch = 19)
+
+ggplot(temperatures, aes(YEAR, J.J.A)) +
+  geom_point() +
+  theme_bw()
+
+# Use different colors or shapes to distinguish data among three stations
+
+# option 1
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = temperatures$STATION, 
+     pch = 19)
+
+# option 2
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = city_colours[temperatures$STATION], 
+     pch = 19)
+
+# option 3
+ggplot(temperatures, aes(YEAR, J.J.A, colour = STATION)) +
+  geom_point() +
+  theme_bw()
+
+# Add a loess smooth line for each station separately
+
+ # options 1
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = temperatures$STATION, 
+     pch = 19) 
+lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x) 
+lines(predict(loess(boise_temp$J.J.A~boise_temp$YEAR)),x=loess(boise_temp$J.J.A~boise_temp$YEAR)$x) 
+lines(predict(loess(seattle_temp$J.J.A~seattle_temp$YEAR)),x=loess(seattle_temp$J.J.A~seattle_temp$YEAR)$x)  
+
+# option 2
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = city_colours[temperatures$STATION],  
+     pch = 19) +
+lines(
+  predict(
+    loess(
+      boise_temp$J.J.A~boise_temp$YEAR)
+    ), x=loess(
+      boise_temp$J.J.A~boise_temp$YEAR)$x, 
+      col = city_colours[1],
+      lwd = 2) +
+lines(
+  predict(
+    loess(
+      ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)
+    ), x=loess(
+      ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x, 
+      col = city_colours[2],
+      lwd = 2) +
+lines(
+  predict(
+    loess(
+      seattle_temp$J.J.A~seattle_temp$YEAR)
+    ), x=loess(
+      seattle_temp$J.J.A~seattle_temp$YEAR)$x,
+      col = city_colours[3],
+      lwd = 2) 
+
+# option 3
+ggplot(temperatures, aes(YEAR, J.J.A, colour = STATION)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = F) +
+  theme_bw() 
+
+# Add other graph elements, such as title, subtitle, axis labels, etc.
+
+plot(J.J.A ~ YEAR, data = temperatures,
+     col = temperatures$STATION, 
+     pch = 19,
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard", 
+     xlab = 'Year', 
+     ylab = 'Mean Temperature June - August (C°)') +
+  lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x)
+lines(predict(loess(boise_temp$J.J.A~boise_temp$YEAR)),x=loess(boise_temp$J.J.A~boise_temp$YEAR)$x) +
+  lines(predict(loess(seattle_temp$J.J.A~seattle_temp$YEAR)),x=loess(seattle_temp$J.J.A~seattle_temp$YEAR)$x)  
+
+ggplot(temperatures, aes(YEAR, J.J.A, colour = STATION)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = F) +
+  theme_bw() +
+  labs(title = "title", x = "Year", y = "June-August", colour = "Station")
+
+# Add a legend for stations
+
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = as.factor(temperatures$STATION), 
+     pch = 19,
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard", 
+     xlab = 'Year', 
+     ylab = 'Mean Temperature June - August (C°)')  
+lines(predict(loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)),x=loess(ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x) 
+lines(predict(loess(boise_temp$J.J.A~boise_temp$YEAR)),x=loess(boise_temp$J.J.A~boise_temp$YEAR)$x) 
+lines(predict(loess(seattle_temp$J.J.A~seattle_temp$YEAR)),x=loess(seattle_temp$J.J.A~seattle_temp$YEAR)$x) 
+legend("topright", 
+       legend = levels(as.factor(temperatures$STATION)), 
+       col = as.factor(temperatures$STATION), 
+       pch = 19, 
+       bty = "n", 
+       pt.cex = 2, 
+       cex = 1.2, 
+       text.col = "black", 
+       horiz = F )
+
+# option 2
+par(mar = c(5, 4, 4, 7), xpd = TRUE)
+plot(J.J.A ~ YEAR, data = temperatures, 
+     col = city_colours[temperatures$STATION],
+     pch = 19,
+     main = "Regression of Temperature by Year", 
+     sub = "NASA Goddard", 
+     xlab = 'Year', 
+     ylab = 'Mean Temperature June - August (C°)'
+     ) 
+lines(
+    predict(
+      loess(
+        boise_temp$J.J.A~boise_temp$YEAR)
+    ), x=loess(
+      boise_temp$J.J.A~boise_temp$YEAR)$x, 
+    col = city_colours[1],
+    lwd = 2) 
+lines(
+    predict(
+      loess(
+        ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)
+    ), x=loess(
+      ohare_temp_jja$J.J.A~ohare_temp_jja$YEAR)$x, 
+    col = city_colours[2],
+    lwd = 2) 
+lines(
+    predict(
+      loess(
+        seattle_temp$J.J.A~seattle_temp$YEAR)
+    ), x=loess(
+      seattle_temp$J.J.A~seattle_temp$YEAR)$x,
+    col = city_colours[3],
+    lwd = 2)  
+legend("topright", 
+       inset = c(- 0.35, 0),
+       legend = c("Boise", "Chicago", "Seattle"), 
+       col = city_colours, 
+       pch = 19, 
+       bty = "n", 
+       pt.cex = 2, 
+       cex = 1.2, 
+       text.col = "black", 
+       horiz = F 
+)
+
+# option 3
+
+ggplot(temperatures, aes(YEAR, J.J.A, colour = STATION)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = F) +
+  theme_bw() +
+  labs(title = "Average Temperature June-August", 
+       x = "Year",
+       y = "Degrees C*", 
+       colour = "Station") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+# Save graphs
+```{r}
+getwd()
+ggsave("All_airport_temperatures.png", device = "png", width = 11, height = 11, units = 'cm')
+
+# Save the script
+
+ctrl + s

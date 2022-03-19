@@ -1,0 +1,249 @@
+---
+title: "CS_02_Answers"
+author: "steppe"
+date: "1/16/2022"
+output: html_document
+---
+
+
+```{r load libraries, message  = F, warning = F}
+library(gapminder)
+library(tidyverse)
+library(data.table) # tidyverse alternative "strictly for linemen not for freshmen"
+```
+
+
+```{r}
+gapminder
+gapminder <- as.data.frame(gapminder)
+head(gapminder)
+
+```
+
+
+Remove Kuwait
+```{r Remove Kuwait}
+
+# TIDYVERSE
+gapminder_tv <- filter(gapminder, country != 'Kuwait') # option 1
+gapminder_tv <- gapminder %>% filter(!country %in% 'Kuwait') # option 2
+
+'%notin%' <- Negate('%in%')
+to_rm <- c('Kuwait') # better for lists.
+gapminder_tv <- gapminder %>% filter(country %notin% to_rm) # option 3 - weird
+
+# BASE R
+gapminder_b <- gapminder[gapminder$country != 'Kuwait',] # option 1
+gapminder_b <- gapminder[which(gapminder$country!='Kuwait'),] # option 2
+gapminder_b <- base::subset(gapminder, country != 'Kuwait') # option 3
+
+# DATA.TABLE
+gapminder_dt <- setDT(gapminder) # important. 
+gapminder_dt <- gapminder_dt[country != 'Kuwait']
+
+rm('%notin%', to_rm)
+```
+
+
+• Q1. What are the top three countries with the *highest* or the *lowest* life expectancy at birth in 1957
+and 2007?
+
+```{r Life Expectancy top bottom three}
+
+# TIDYVERSE
+life_tv <- gapminder_tv %>% # option 1,2,3 & 4
+  filter(year == 1957 | year == 2007) %>% # likewise year %in% c(1957, 2007) works
+  group_by(year) %>% 
+  arrange(-lifeExp) %>%  # -
+  # ARRANGE defaults to ascending order,
+  # we can remove the '-' and return the longest lifes this way to
+  slice_head(n = 3)
+  # for each pair of '-' the the slice can be switched.
+
+# BASE R
+# 4 combinations here. 
+life_b_57 <- gapminder_b[gapminder_b$year == 1957,] #  - this can be changed for '2007'
+life_b_57 <- life_b_57[order(life_b_57$lifeExp, decreasing = TRUE), ] # this can be flipped T > F
+life_b_57 <- base::Reduce(rbind, by(life_b_57, life_b_57["year"], head,n = 3)) # 'head' can be flipped to 'tail'
+life_b_57 <- life_b_57[1:3,] # by hand for both ways... also life_b_57[nrows(life_b_57):nrows(life_b_57)-3]
+# life_b_57 <- life_b_57[(nrow(life_b_57)-2):nrow(life_b_57),] # a gross complement to the above option [1:3]
+
+
+# DATA.TABLE
+# 4 combinations here. 
+life_dt <- gapminder_dt[year == 1957 | year == 2007][order(lifeExp), head(.SD, 3), by = "year"]
+# likewise year %in% c(1957, 2007) works 
+# can flip to 'tail.' 
+
+rm(life_tv, life_b_57, life_dt)
+```
+
+• Q2. How many countries had life expectancy at birth smaller than 50 in 1957 and 2007?
+
+```{r}
+
+# TIDYVERSE
+life_exp_tv <- gapminder_tv %>% # works
+  filter(year == 1957 & lifeExp < 50 | year == 2007 & lifeExp < 50) %>% 
+  group_by(country) %>% 
+  count() %>% 
+  filter(n >= 2) %>% # should be 18...
+  nrow()
+
+# still in works BASE R
+life_exp_b <- with(gapminder_b, gapminder_b[(year==1957 & lifeExp < 50) | (year==2007 & lifeExp < 50), ])
+counts <- table(life_exp_b$country)
+life_exp_b <- life_exp_b[life_exp_b$country %in% names(counts[counts == 2]), ]
+length(unique(as.character(life_exp_b$country)))
+
+# DATA.TABLE
+# option 1
+life_exp_dt <- gapminder_dt[year %in% c(1957,2007) & lifeExp < 50][, counts := .N, by = country][counts >= 2]
+count(unique(life_exp_dt, by = 'country'))
+
+# option 2
+life_exp_dt <- gapminder_dt[year %in% c(1957,2007) & lifeExp < 50][, if (.N == 2) .SD, by = country]
+count(unique(life_exp_dt, by = 'country'))
+
+rm(life_exp_tv, life_exp_b, life_exp_dt)
+```
+
+• Q3. What are total population in 1957 and 2007, in Asia and Americas respectively?
+
+```{r}
+# TIDYVERSE
+total_pop_tv <- gapminder_tv %>% 
+  filter(continent %in% c('Asia', 'Americas') & year %in% c(1957, 2007)) %>% 
+  group_by(continent, year) %>% 
+  summarise(.groups = "keep", sum(pop))
+
+#with(gapminder_b, gapminder_b[(which(year %in% c(1957, 2007))) & which(continent %in% c('Asia', 'Americas'))])
+
+# DATA.TABLE
+total_pop_dt <- gapminder_dt[continent %in% c('Asia', 'Americas') & year %in% c(1957, 2007)][,new := sum(pop), by = list(continent, year)]
+  
+rm(total_pop_tv)
+```
+
+• Q4. How many countries had population higher than 30,000,000 in 1957 and 2007?
+
+```{r}
+# TIDYVERSE
+nrow(gapminder_tv %>% filter(year == 1957 & pop > 30000000))
+nrow(gapminder_tv %>% filter(year == 2007 & pop > 30000000))
+
+# BASE 
+nrow(with(gapminder_b, gapminder_b[(year==1957 & pop > 30000000), ]))
+nrow(with(gapminder_b, gapminder_b[(year==2007 & pop > 30000000), ]))
+
+# DATA.TABLE
+nrow(gapminder_dt[year == 1957 & pop > 30000000])
+nrow(gapminder_dt[year == 2007 & pop > 30000000])
+```
+
+• Q5. What are the top five countries with the highest total GDP (pop*gdpPercap) in 1957 and 2007?
+
+```{r}
+
+# TIDYVERSE
+t5_Tgdp_tv <- gapminder_tv %>% 
+  filter(year %in% c(1957, 2007)) %>% 
+  mutate('Tgdp' = pop*gdpPercap) %>% 
+  group_by(year) %>% 
+  slice_max(Tgdp, n = 5) 
+
+# BASE
+t5_Tgdp_b <- gapminder[gapminder$year %in% c(1957, 2007),]
+t5_Tgdp_b$Tgdp <- t5_Tgdp_b$pop * t5_Tgdp_b$gdpPercap
+t5_Tgdp_b <- t5_Tgdp_b[order(t5_Tgdp_b$year, t5_Tgdp_b$Tgdp, decreasing = T),]
+t5_Tgdp_b <- split(t5_Tgdp_b, f = t5_Tgdp_b$year)
+t5_Tgdp_b <- lapply(t5_Tgdp_b, function(x) head(x, n = 5))
+t5_Tgdp_b <- do.call("rbind", t5_Tgdp_b)
+
+# DATA.TABLE
+t5_Tgdp_dt <- gapminder_dt[year %in% c(1957,2007)][,Tgdp := pop*gdpPercap][order(Tgdp), tail(.SD, 5), by = year]
+
+rm(t5_Tgdp_tv, t5_Tgdp_b, t5_Tgdp_dt)
+```
+
+• Q6. What are the mean values of lifeExp and gdpPercap in 1957 and 2007, for Africa and Europe
+respectively?
+
+```{r}
+# TIDYVERSE
+means_tv <- gapminder_tv %>% 
+  filter(year %in% c(1957, 2007) & continent %in% c('Africa', 'Europe')) %>% 
+  group_by(continent, year) %>% 
+  mutate(mean_LE = mean(lifeExp)) %>% 
+  mutate(mean_GDP = mean(gdpPercap)) %>% 
+  dplyr::select(continent, year, mean_LE, mean_GDP) %>% 
+  distinct()
+
+# BASE
+means_b <- with(gapminder_b, gapminder_b[(year %in% c(1957, 2007) & continent %in% c('Africa', 'Europe')),])
+means_b <- aggregate(. ~ means_b$continent + means_b$year, data = means_b, 
+          FUN = function(x) {mean(x)})
+means_b <- means_b[,c(1,5:6,8)]
+colnames(means_b) <- c('continent','year','mean_LE','mean_GDP')
+
+# DATA.TABLE
+grp_vars <- c('continent','year')
+means_dt <- gapminder_dt[continent %in% c('Africa', 'Europe') & year %in% c(1957, 2007)][,mean_LE := mean(lifeExp), by = grp_vars][,mean_GDP := mean(gdpPercap), by = grp_vars][, c("continent","year","mean_LE","mean_GDP")]
+setkeyv(means_dt, grp_vars)
+means_dt <- subset(unique(means_dt))
+
+rm(means_tv, means_b, grp_vars, means_dt)
+```
+
+
+Scatterplots of lifeExp, pop and gdpPercap of United States over the years from 1952
+to 2007.
+
+
+```{r Scatterplots}
+
+# TIDYVERSE
+
+sp_data <- filter(gapminder_tv, country == 'United States') %>% mutate(pop = pop/1000000) 
+
+a <- ggplot(sp_data, aes(x = year, y = lifeExp)) +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Year", y = "Life Expectancy",
+       title = "Life Expectancy in the United States (1952-2007)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+b <- ggplot(sp_data, aes(x = year, y = pop)) +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Year", y = "Population in Millions",
+       title = "Population in the United States (1952-2007)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+c <- ggplot(sp_data, aes(x = year, y = gdpPercap)) +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Year", y = "GDP per capita",
+       title = "Gross Domestic Product (GDP) per Capita in the United States (1952-2007)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+
+d <- cowplot::plot_grid(a,b,c, labels = NULL, ncol = 1)
+ggsave("US_Scatterplot_tv.png", plot = d, dpi = 300)
+
+# Base R
+sp_data <- gapminder_b[gapminder_b$country == "United States",]
+sp_data$pop <- sp_data$pop/1000000
+
+png(file = "US_Scatterplot_base.png", width = 900, height = 600)
+par(mfrow = c(3,1))
+plot(x=sp_data$year, y=sp_data$lifeExp, xlab = "Year", ylab = "Life Expectancy", pch = 19,
+     main = "Life Expectancy in the United States (1952-2007)")
+plot(x=sp_data$year, y=sp_data$pop, xlab = "Year", ylab = "Population in Millions", pch = 19,
+     main = "Population in the United States (1952-2007)")
+plot(x=sp_data$year, y=sp_data$gdpPercap, xlab = "Year", ylab = "GDP per capita", pch = 19,
+     main = "Gross Domestic Product (GDP) per Capita in the United States (1952-2007)")
+
+dev.off()
+
+rm(sp_data, a, b, c, d)
+```
+

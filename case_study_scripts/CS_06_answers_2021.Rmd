@@ -1,0 +1,203 @@
+---
+title: "Case Study 6"
+author: "Reed"
+date: "2/24/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, Define Global Settings, echo = FALSE}
+knitr::opts_chunk$set(cache=TRUE)  # going to be useful as rasters take some time to process. 
+```
+
+```{r loadlib, results = 'hide', message = F, warning = F}
+library(raster)
+library(sf)
+library(sp)
+library(spData)
+library(tidyverse)
+library(rasterVis)
+```
+
+
+# Background & Objectives
+
+We are interested in identifying the country with the warmest months in each of the worlds continents, and several oceanic areas - less Antarctica. After identifying these areas we are planning horticultural collection trips in order to find suitable wild material to develop for personal water-wise gardens throughout that continent. 
+
+In order to achieve this, we will utilize comprehensive climate data which covers all of the aforementioned terrestrial areas, and extract the values of 10 second cells to our polygons of countries.
+# Data
+
+
+# Method
+
+
+```{r, Prepare World Data}
+data(world)
+head(world)
+
+world <- filter(world, continent != 'Antarctica') # A) remove antarctica
+world.sp <- as(world, 'Spatial') #  B) Sp here we come!
+```
+
+
+b. Inspect thenewtmax_monthlyobject (you can start by just typing it’s nametmax_monthly, then perhaps makingaplot()). How many layers does it have? What do these represent? What are the units? Refer to thein-class exercises on WorldClim data.
+c. Convert to Degrees C. What value do you need to multiplywith the data to get degrees C? d. Create a new object calledtmax_annualthat is the annual maximum2
+temperature in each pixel of the raster stack usingmax(). This will find the maximum temperature ineach location across all months. e. Usenames(tmax_annual) <- "tmax"to change the name of thelayer in the newtmax_annualobject totmax. This makes the later code more intuitive than keepingthe default namelayer.
+
+```{r, Prepare Climate Data}
+tmax_monthly_raw <-getData(name = "worldclim", var="tmax", res=10) # A) DOWNLOAD THE DATA AT 10 DEGREES
+tmax_monthly_raw # B) INSPECT THE OBJECT
+```
+This rasterstack is composed of 12 layers, which represent each month of the calendar year.  
+
+```{r, Visualize the Raster data}
+rasterVis::gplot(tmax_monthly_raw[[1]])+
+  geom_raster(aes(fill=value))+
+  scale_fill_gradientn(colours=c("white", "green", "red"))+
+  coord_equal() +
+  theme_bw() +
+  labs(title="Temperatures in January", 
+       y="Latitude",
+       x="Longitude",
+       caption="Data from WorldClim",
+       fill = "Degrees Celsius x10") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.background = element_rect(fill="gray",
+                                  size=0.5, linetype="solid", 
+                                  colour ="gray"))
+
+
+par(mfrow=c(1,2));plot(tmax_monthly_raw[[1]], main = 'Temperatures in January', col = rev(heat.colors(500))); plot(tmax_monthly_raw[[7]], main = 'Temperatures in July', col = rev(heat.colors(500)))
+```
+As an example we have plotted one months worth of data. January, see how the Northern Hemisphere is much colder than the Southern Hemisphere which is experiencing it's Summer. 
+
+
+These values represent degrees celsius. Because storing numbers as 'doubles', i.e. with floating points, consumes many bytes, these data are distributed as integers, which may be multiplied by 0.1 to return the degrees in celsius.
+
+```{r, Recover degrees celcius}
+
+tmax_monthly <- tmax_monthly_raw * 0.1 # convert to degrees celsius. 
+
+tmax_annual <- max(tmax_monthly) # select the maximum value for each cell, across the 12 layers. 
+names(tmax_annual) <- "tmax" # rename the values here to temperature max = tmax
+
+plot(tmax_annual,  main = 'The Hottest Temperatures Across the Year', col = rev(heat.colors(50))) # this is what it looks like
+
+tmax_annual # is now a raster layer. 
+```
+
+
+same approach with more code. 
+```{r}
+# tmax_monthly.test <- calc(tmax_monthly, function(x){x * 0.1}, forceapply=TRUE)
+# tmax_annual.test <- max(tmax_monthly.test)
+# tmax_annual.test
+# plot(tmax_annual.test, col = rev(heat.colors(50)))
+```
+
+
+```{r, Extract Hottest Countries -  four different ways}
+
+world.sp <- raster::extract(tmax_annual, world.sp, fun = max, na.rm=T, small=T, sp=T)
+world.sf <- st_as_sf(world.sp) 
+
+hottest_countries.3 <- world.sf %>%   # easiest. Yingying recommended way. 
+  #st_drop_geometry() %>% 
+  group_by(continent) %>% 
+  top_n(1, tmax)
+
+hottest_countries <- world.sf %>%   # easiest. if all we want to do is make a table
+  st_drop_geometry() %>% 
+  group_by(continent) %>% 
+  arrange(desc('tmax'), .by_group = TRUE) %>% 
+  top_n(1)
+
+hottest_countries.1 <- world.sf %>%  #  # using slice max instead of top_n, will work. top_n is being deprecated and sf may have been updated to not accept it as an argument. 
+  group_by(continent) %>% 
+  slice_max(tmax) # specify the variable in this one. 
+
+hottest_countries.2 <- world.sf %>% # just in case you want to keep it as an sf object.... but need to use a function that doesn't work with sf objects - e.g. something from data.table (just using tidyverse still for example)
+  dplyr::select(continent, tmax, iso_a2) %>% 
+  group_by(continent) %>% 
+  st_drop_geometry() %>% 
+  slice_max(tmax) %>% 
+  left_join(world.sf, 
+       dplyr::select(geometry, iso_as), by = 'iso_a2') %>% # rejoin the geometry from the OG sf object. 
+  dplyr::select(!ends_with('.x')) %>% # remove these columns which were copied over from the 'X' object in the join
+  rename(tmax = 'tmax.y') # there were two, let's just keep the y -quicker this way. 
+
+hottest_countries.sp <- world.sp@data[, c('name_long', 'continent', 'tmax')]  # sp way via the slots, doing the optional step of pulling out the columns of interest - maybe you will need this one day! you now have a df and everything else works. 
+
+rm(world.sp, hottest_countries.sp, hottest_countries.2, hottest_countries)
+```
+
+```{r}
+ggplot(world.sf) +
+  geom_sf(aes(fill = tmax)) +
+  scale_fill_viridis_c(name="Annual\nMaximum\nTemperature (C)") +
+  labs(title="Warmest Monthly Temperature Observed in each Country", 
+       y="Latitude",
+       x="Longitude",
+       caption="Sources: WorldClim & CIA.\nMap Made in R V.4.03") +
+  theme(legend.position = 'bottom',
+        plot.title = element_text(hjust = 0.5), 
+        plot.caption = element_text(hjust = 1, face = "italic"))
+
+
+#  plot.caption.position = element_text(hjust = 0.95)
+```
+
+# Results
+
+```{r, Tables - three different ways} 
+hottest_countries.1 %>%  # one option, let's not even bother saving this to a new name. 
+  dplyr::select(name_long, continent, tmax) %>% 
+  st_drop_geometry() %>% 
+  rename('Country' = name_long) %>% #let's rename this
+  rename_with(str_to_title) %>%  # make the first letter of each column name uppercase
+  rename('Maximum Temperature (C°)' = Tmax) %>% 
+  filter(!str_detect(Continent, 'Seven seas')) %>% #  Do we want this record? 
+  knitr::kable()
+```
+table 1
+
+
+
+```{r}
+
+to_tab_base <- st_drop_geometry(hottest_countries.1) #  how to go about this using base R, kinda similar to raster eh? 
+to_tab_base <- to_tab_base[c(1:5,7),c(2:3,11)]
+colnames(to_tab_base) <- c('Country','Continent','Maximum Temperature (C°)') 
+knitr::kable(to_tab_base)
+```
+
+
+
+table 2
+```{r}
+to_tab_kab <- hottest_countries.1 %>%  # using an intermediate dataframe
+  dplyr::select(name_long, continent, tmax) %>% 
+  st_drop_geometry()
+
+knitr::kable(to_tab_kab,  # method 3 with kableExtra
+    #longtable = TRUE,
+    caption = "Countries on each Continent with the hottest monthly temperature", # specify some items and tings. 
+    col.names = c('Country', 'Family', 'Maximum Temperature (C°)'),
+    booktabs = T,
+    linesep = "")  %>% 
+  kableExtra::footnote(alphabet = c("Do you really need a footnote here?")) %>% 
+  kableExtra::kable_styling(font_size = 10)
+```
+table 3
+
+
+# Conclusion
+```{r}
+
+```
+
+
+Let's go botanize in Algeria!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+stuff

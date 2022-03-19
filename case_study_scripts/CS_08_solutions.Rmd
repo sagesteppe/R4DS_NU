@@ -1,0 +1,222 @@
+---
+title: "CS_08"
+author: "steppe"
+date: "2/28/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+This is a case study !
+  
+Many solutions are available!
+
+'You can go your own way, go your own way!'
+
+We made you panic and sweat!
+
+
+```{r Load Library}
+library(kableExtra)
+library(tidyverse)
+```
+
+```{r View Data}
+data(iris)
+head(iris)
+```
+
+```{r Create Iris Summary Statistics}
+
+a <- iris %>% 
+  split(.$Species) %>% 
+  map(summary) %>% 
+  map(as.data.frame) %>% 
+  map(drop_na) %>% 
+  bind_rows() %>% 
+  separate(Freq, c('Statistic', 'Value'), ":") %>% 
+  filter(!str_detect(Var2, 'Species')) %>% 
+  mutate(Species = c(rep('setosa', times = 24), 
+                     rep('versicolor', times = 24), 
+                     rep('virginica', times = 24))) %>% 
+  select(-Var1) %>% 
+  rename(Variable = Var2) %>% 
+  filter(!str_detect(Statistic, 'Qu'))
+
+iris_table <- iris %>% 
+  group_by(Species) %>% 
+  summarise(across(where(is.numeric), 
+                   list(
+                     'min.'= min,
+                     max = max, 
+                     mean = mean,
+                     median = median))
+            ) %>% 
+  pivot_longer(-Species, values_to = 'Value') %>% 
+  separate(name, c('Tissue', 'Statistic'), sep = "_") %>% 
+  
+  # style down here
+  mutate(Tissue = str_replace(Tissue, '[.]', ' ')) %>% 
+  mutate(Species =  paste0('I. ', Species)) %>% 
+  mutate(Value = round(Value, digits = 1)) %>% 
+  
+  pivot_wider(names_from = Tissue, values_from = Value) %>% 
+  mutate(Statistic=fct_relevel(Statistic, "min.", "mean", "median", 'max')) %>% 
+  arrange(Species, Statistic)
+
+iris_table[c(2:4, 6:8, 10:12),1] <- ""
+knitr::kable(iris_table, 
+             align = "llcccc", 
+             col.names = c('Species','Statistic','Length','Width','Length','Width'), 
+             caption = "Summary Statistics of Iris Dataset") %>% 
+  kable_classic(full_width = F, html_font = "Cambria") %>% 
+  add_header_above(., c(" " = 2, "Sepal" = 2, "Petal" = 2))  
+
+rm(a, iris_table)
+```
+
+
+
+```{r Create Model of Single Continuous Predictor and Response}
+model_summary <- summary(lm(Sepal.Length ~ Sepal.Width, data = iris))
+model_summary_statistics <- tibble("intercept" = model_summary$coefficients[1,1],
+                                   "slope"     = model_summary$coefficients[2,1],
+                                   "p_value"   = model_summary$coefficients[2,4],
+                                   "r_squared"  = model_summary$r.squared)    
+
+model_summary_statistics <- model_summary_statistics %>% 
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) 
+
+knitr::kable(model_summary_statistics, 
+             col.names = c('Intercept', 'Slope','p-Value','R$^2$'),
+             align = "cccc",
+             caption = "Results of a linear model with one continuous predictor and response"
+             ) %>% 
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+
+```{r Plot relationship between single continuous predictor and response}
+
+ggplot(iris, aes(x = Sepal.Width, y = Sepal.Length))+
+  geom_jitter()+
+  geom_abline(intercept = model_summary$coefficients[1,1], 
+              slope = model_summary$coefficients[2,1], size = 2) +
+  theme_classic(base_size = 10) +
+  labs(title = 'Relationship between Sepal Width and Sepal Length in three Species of Iris',
+       y = 'Sepal Length', x = 'Sepal Width') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+We can make a big overly fancy plot of these relationships like so below. The one wrench in the gear is that I cannot figure out how to reorder the fancy dual legend with the line legend below using guides! Perhaps you can?
+```{r Plot relationship between single continuous predictor and response with a confidence interval}
+model <- lm(Sepal.Length ~ Sepal.Width, data = iris)
+conf_int <- as.data.frame(predict(model, interval = "confidence", level = 0.95))
+conf_int <- cbind(conf_int, iris)
+
+pred_int <- as.data.frame(predict(model, interval = "prediction", level = 0.95))
+pred_int <- cbind(pred_int, iris)
+
+ggplot(conf_int, aes(x = Sepal.Width, y = Sepal.Length))+
+  
+  # I use jitter to show I used these data as continuous ! 
+  geom_jitter(
+    aes(
+      shape=Species, color = Species)
+    ) +
+  
+  
+  # we can add our model here
+  geom_abline(intercept = model_summary$coefficients[1,1], 
+              slope = model_summary$coefficients[2,1], 
+              size = 1) +
+  
+  # Confidence intervals are here
+  geom_line(aes(y = lwr), color = "black", linetype = "dashed") +
+  geom_line(aes(y = upr), color = "black", linetype = "dashed") +
+  
+    # this one is fake! only used to add the legend !
+  geom_line(aes(y = lwr, linetype = "dashed"), color = "black") +
+  # fill in the polyong here
+  geom_ribbon(aes(ymin=lwr, ymax=upr), alpha=0.1) +
+  
+  # Prediction intervals are here
+  geom_line(data = pred_int, aes(y = lwr), color = "black", linetype = "dotted") +
+  geom_line(data = pred_int, aes(y = upr), color = "black", linetype = "dotted") +
+    # this one is fake! only to add the legend ! 
+  geom_line(data = pred_int, aes(y = lwr, linetype = "dotted"), color = "black") +
+  
+  
+  # define and add a line legend here
+  scale_linetype_manual(values = c("95% Prediction"  = "dotted", 
+                                   "95% Confidence"  = "dashed"),
+                        name = "Intervals") +
+  
+  # modify the shapes and colours of these data; if you are interested. 
+  scale_colour_manual(name = "Species",
+                      labels = c("I. Setosa", "I. Versicolor", "I. Virginica"),
+                      values = c("cyan4", "plum3", "coral1")) +   
+  scale_shape_manual(name = "Species",
+                      labels = c("I. Setosa", "I. Versicolor", "I. Virginica"),
+                      values = c(17, 15, 19)) +
+  
+    # Some style stuff is here
+  labs(title = 'Regression of Sepal Width and Sepal Length in three Iris Species',
+       y = 'Sepal Length (mm)', 
+       x = 'Sepal Width (mm)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  
+  # we will add the p-value and r^2 to the plot - it is a little busy for my liking !
+  annotate(geom ="text", x=2.25, y=4.1, 
+           label= paste0("p-value = ", model_summary_statistics[,3])) +
+  annotate(geom = "text", x=2.25, y=3.9, 
+          label = paste0("r^2 = ", model_summary_statistics[,4])) +
+
+  # manually select our shapes
+  theme_classic()
+
+rm(model, conf_int, pred_int, data)
+```
+
+
+```{r Calculate our own prediction via this method}
+
+p1 <- iris %>% 
+  mutate(Sepal.Length.Predict = 
+           ((model_summary$coefficients[2,1]) * Sepal.Width) + model_summary$coefficients[1,1],
+         Sepal.Length.Predict.upr = Sepal.Length.Predict + 1.96*model_summary$sigma, 
+         Sepal.Length.Predict.lwr = Sepal.Length.Predict - 1.96*model_summary$sigma)
+
+ggplot(data = iris, aes(x= Sepal.Width, y= Sepal.Length)) + 
+  geom_point() +
+  geom_abline(slope = model_summary$coefficients[2,1],
+              intercept = model_summary$coefficients[1,1]) + 
+  geom_ribbon(data = p1, 
+              aes(ymin=Sepal.Length.Predict.lwr,
+                  ymax=Sepal.Length.Predict.upr), 
+              alpha=0.2) + 
+  labs(title = 'Relationship between Sepal Width and Sepal Length in three Iris Species',
+       y = 'Sepal Length', x = 'Sepal Width') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+rm(p1)
+```
+
+
+```{r Plot relationship between single continuous predictor and response with a confidence interval -Compare results}
+ggplot(iris, aes(x = Sepal.Width, y = Sepal.Length))+
+  geom_jitter()+
+  geom_smooth(method = "lm", colour = "black", formula = y ~ x) +
+  labs(title = 'Relationship between Sepal Width and Sepal Length in three Iris Species',
+       y = 'Sepal Length', x = 'Sepal Width') +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r Clear environment}
+rm(iris, model_summary)
+```
+

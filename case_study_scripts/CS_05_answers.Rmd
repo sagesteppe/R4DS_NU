@@ -1,0 +1,126 @@
+---
+title: "CS_05_answers"
+author: "steppe"
+date: "2/7/2022"
+output: pdf_document
+---
+
+
+```{r}
+library(tidyverse)
+library(gapminder)
+```
+
+Wranglin'.
+```{r}
+gapminder <- filter(gapminder, country != "Kuwait")
+```
+
+```{r Wealth and life expectpancy through time, fig.cap= 'Wealth and life expectpancy through time'}
+
+ggplot(gapminder, aes(x = lifeExp, y = gdpPercap, color = factor(continent))) + 
+  geom_point(aes(size = pop/100000)) + 
+  scale_y_continuous(trans = "sqrt") + 
+  facet_wrap(~year) +
+  theme_bw()  +
+  labs(x="Life expectancy", 
+       y ="GDP per capita", 
+       color="Continent", 
+       size="Population (100k)"
+       )
+
+```
+
+```{r}
+
+?facet_wrap
+
+gapminder %>% 
+  group_by(continent, year) %>% 
+  mutate(
+    gdpPercapweighted = mean(x = gdpPercap, w = pop),
+            pop = sum(as.numeric(pop))) %>% 
+  
+  ggplot( aes(year, gdpPercap)) + 
+  
+  geom_point(aes(color = factor(continent), 
+                 size = pop/100000)) + 
+  scale_size_continuous(range = c(1,3)) + 
+  geom_line(aes(color = factor(continent), group = country)) + 
+  
+  # nice simple theme
+  theme_bw() +
+  
+  # create the 5 continent facet
+  facet_wrap(~continent, ncol = 5 ) +
+  
+  # we add the means black points and lines here
+  geom_point(aes(year, gdpPercapweighted, 
+                 size=pop/100000)) +
+  geom_line(aes(year, gdpPercapweighted))  +
+
+  # update all of the labels here.   
+  labs(x="Year",
+       y ="GDP per capita", 
+       color="Continent", 
+       size="Population (100k)") #good
+  
+  
+a <- gapminder %>% 
+  group_by(continent, year) %>% 
+  summarise(
+    gdpPercapweighted = mean(x = gdpPercap, w = pop),
+            pop = sum(as.numeric(pop)))
+
+png(filename = 'fig2_gampinder.png', width = 1280, height = 720, units = "px")
+ggplot(data = gapminder,  aes(year, gdpPercap)) + 
+  
+  geom_point(aes(color = factor(continent), 
+                 size = pop/100000)) + 
+  #scale_size_continuous(range = c(1,3)) + 
+  geom_line(aes(color = factor(continent), group = country)) + 
+  
+  # nice simple theme
+  theme_bw() +
+  
+  # create the 5 continent facet
+  facet_wrap(~continent, ncol = 5) +
+  
+  # we add the means black points and lines here
+  geom_point(data = a, aes(year, gdpPercapweighted, 
+                 size=pop/100000)) +
+  geom_line(data = a, aes(year, gdpPercapweighted)) +
+
+  # update all of the labels here.   
+  labs(x="Year",
+       y ="GDP per capita", 
+       color="Continent", 
+       size="Population (100k)")# +#good
+  
+#  guides(size = guide_legend(order = 2),
+#         color = guide_legend(order = 1))
+
+dev.off()
+```
+
+```{r}
+
+gapminder %>% 
+  group_by(year) %>% 
+  arrange(year, desc(gdpPercap)) %>% 
+  slice(1:10) %>% 
+  
+  ggplot(aes(x = country, y = gdpPercap, 
+             fill = continent)) + 
+  geom_bar(stat= "identity") + 
+  facet_wrap(~year, nrow=4, scales="free_y") + 
+  labs(x = "Country (Top 10)", 
+      y = "GDP per capita", 
+      fill ="Continent") +
+  coord_flip() + 
+  theme_bw() + 
+  theme(text = element_text(size=7))
+
+ggsave('fig3_gapminder.png', units = 'cm', width = 12, height = 12)
+```
+
